@@ -15,7 +15,6 @@ import org.slf4j.LoggerFactory;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
-import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.LocalDateTime;
 import java.util.*;
@@ -43,6 +42,11 @@ public class MysqlSink2 extends RichSinkFunction<String> {
      */
     private volatile int historyDataDays = 1;
 
+    /**
+     * 程序最多执行时间
+     */
+    private volatile Date futureDate;
+
     private final Lock modelTaskStatusLock = new ReentrantLock();
 
     private volatile Map<String, Object> modelingParams = ModelParamsConfigurer.getModelingParams();
@@ -64,6 +68,11 @@ public class MysqlSink2 extends RichSinkFunction<String> {
         checkState();
         if (state != ServiceState.Ready) {
             logger.warn("build modeling is stopped...");
+            return;
+        }
+        // 判断是否超出存储数据天数
+        if (!isFirst && !canSink()) {
+            logger.warn("more than save data days");
             return;
         }
         JSONObject json = (JSONObject) JSONValue.parse(jsonStr);
@@ -119,6 +128,10 @@ public class MysqlSink2 extends RichSinkFunction<String> {
             updateModelTaskStatus(AssetBehaviorConstants.ModelStatus.SUCCESS);
             //记录运行天数
             updateModelHistoryDataDays();
+
+            Calendar calendar = Calendar.getInstance();
+            calendar.set(Calendar.DAY_OF_YEAR, calendar.get(Calendar.DAY_OF_YEAR) + this.historyDataDays);
+            this.futureDate = calendar.getTime();
         }
 
     }
@@ -376,5 +389,22 @@ public class MysqlSink2 extends RichSinkFunction<String> {
         return false;
     }
 
-
+    /**
+     * 判断time是否在now的n天之内
+     * n :正数表示在条件时间n天之后，负数表示在条件时间n天之前
+     */
+    private boolean canSink() {
+        Date cTime = new Date(), fTime = this.futureDate;
+        int n = -this.historyDataDays;
+        Calendar calendar = Calendar.getInstance();
+        calendar.setTime(cTime);
+        calendar.add(Calendar.DAY_OF_MONTH, n);
+        //得到n天前的时间
+        Date before7days = calendar.getTime();
+        if (before7days.getTime() <= fTime.getTime()) {
+            return true;
+        } else {
+            return false;
+        }
+    }
 }

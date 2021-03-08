@@ -80,9 +80,9 @@ public class KafkaMessageStreaming implements AssetBehaviorConstants {
         streamExecutionEnvironment.setRestartStrategy(RestartStrategies.fixedDelayRestart(4, Time.of(20, TimeUnit.SECONDS)));
         streamExecutionEnvironment.setStreamTimeCharacteristic(TimeCharacteristic.EventTime);
 
-        EnvironmentSettings fsSettings = EnvironmentSettings.newInstance().useOldPlanner().inStreamingMode().build();
+        //EnvironmentSettings fsSettings = EnvironmentSettings.newInstance().useOldPlanner().inStreamingMode().build();
         //创建 TableEnvironment
-        StreamTableEnvironment streamTableEnvironment = StreamTableEnvironment.create(streamExecutionEnvironment, fsSettings);
+        //StreamTableEnvironment streamTableEnvironment = StreamTableEnvironment.create(streamExecutionEnvironment, fsSettings);
 
         //每隔60s进行启动一个检查点【设置checkpoint的周期】
         //streamExecutionEnvironment.enableCheckpointing(1000 * 60);
@@ -135,7 +135,6 @@ public class KafkaMessageStreaming implements AssetBehaviorConstants {
         //建模系列操作_new
         {
             SingleOutputStreamOperator<String> map = kafkaSourceFilter.map(new AssetMapSourceFunction());
-            map.print().setParallelism(1);
             map.addSink(new MysqlSink2());
         }
 
