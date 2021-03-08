@@ -14,6 +14,13 @@ public class AssetSourceEntity {
     public AssetSourceEntity() {
     }
 
+    public AssetSourceEntity(String entityId, String entityName, String assetIp, Integer areaId) {
+        this.entityId = entityId;
+        this.entityName = entityName;
+        this.assetIp = assetIp;
+        this.areaId = areaId;
+    }
+
     public String getEntityId() {
         return entityId;
     }

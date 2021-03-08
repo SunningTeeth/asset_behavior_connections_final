@@ -1,23 +1,30 @@
 package com.lanysec.config;
 
 import com.lanysec.services.AssetBehaviorConstants;
+import com.lanysec.utils.ConversionUtil;
 import com.lanysec.utils.DbConnectUtil;
 import com.lanysec.utils.SystemUtil;
 import org.apache.flink.api.common.typeinfo.BasicTypeInfo;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.java.io.jdbc.JDBCInputFormat;
 import org.apache.flink.api.java.typeutils.RowTypeInfo;
+import org.json.simple.JSONArray;
+import org.json.simple.JSONValue;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import sun.plugin2.message.Conversation;
 
 import java.sql.Connection;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.*;
 
 /**
  * @author daijb
  * @date 2021/3/5 21:33
  * 模型参数检查
+ * TODO 定时更新模型参数待完成
  */
 public class ModelParamsConfigurer implements AssetBehaviorConstants {
 
@@ -27,9 +34,7 @@ public class ModelParamsConfigurer implements AssetBehaviorConstants {
 
     private static Map<String, Object> modelingParams;
 
-    static {
-        reloadModelParams();
-    }
+    private static volatile boolean isFirst = true;
 
     /**
      * 返回建模参数
@@ -38,7 +43,7 @@ public class ModelParamsConfigurer implements AssetBehaviorConstants {
      */
     public static Map<String, Object> getModelingParams() {
         if (modelingParams == null) {
-            modelingParams = buildModelingParams();
+            modelingParams = reloadModelingParams();
         }
         return modelingParams;
     }
@@ -46,12 +51,12 @@ public class ModelParamsConfigurer implements AssetBehaviorConstants {
     /**
      * 从数据库获取建模参数
      */
-    private static Map<String, Object> buildModelingParams() {
+    public static Map<String, Object> reloadModelingParams() {
         Connection connection = DbConnectUtil.getConnection();
         Map<String, Object> result = new HashMap<>(15 * 3 / 4);
         try {
             String sql = "select * from modeling_params" +
-                    " where model_type=1 and model_child_type =1" +
+                    " where model_type=1 and model_child_type =3" +
                     " and model_switch = 1 and model_switch_2 =1" +
                     " and modify_time < DATE_SUB( NOW(), INTERVAL 10 MINUTE );";
             ResultSet resultSet = connection.createStatement().executeQuery(sql);
@@ -107,37 +112,43 @@ public class ModelParamsConfigurer implements AssetBehaviorConstants {
                 .setDBUrl("jdbc:mysql://" + addr + ":3306/csp?useEncoding=true&characterEncoding=utf-8&serverTimezone=UTC")
                 .setUsername(SystemUtil.getMysqlUser())
                 .setPassword(SystemUtil.getMysqlPassword())
-                .setQuery("select * from modeling_params where model_type='1' and model_child_type='1';")
+                .setQuery("select * from modeling_params where model_type='1' and model_child_type='3';")
                 .setRowTypeInfo(rowTypeInfo)
                 .finish();
     }
 
+    private static volatile List<Map<String, JSONArray>> lastBuildModelResult = queryLastBuildModelResult();
+
+    public static List<Map<String, JSONArray>> getLastBuildModelResult() {
+        if (lastBuildModelResult == null) {
+            queryLastBuildModelResult();
+        }
+        return lastBuildModelResult;
+    }
+
     /**
-     * 定时更新模型参数
+     * 查询上次建模结果
      */
-    private static void reloadModelParams() {
-        Timer timer = new Timer();
-        Calendar currentTime = Calendar.getInstance();
-        currentTime.setTime(new Date());
-        int delay = 5 - currentTime.get(Calendar.MINUTE) % 5;
-        currentTime.set(Calendar.MINUTE, currentTime.get(Calendar.MINUTE) + delay);
-        currentTime.set(Calendar.SECOND, 0);
-        currentTime.set(Calendar.MILLISECOND, 0);
-        Date firstTime = currentTime.getTime();
+    public static List<Map<String, JSONArray>> queryLastBuildModelResult() {
 
-        // 每五分钟执行
-        timer.scheduleAtFixedRate(new TimerTask() {
-            @Override
-            public void run() {
-                try {
-                    ModelParamsConfigurer.buildModelingParams();
-                    logger.info("reload model params configurer.");
-                } catch (Throwable throwable) {
-                    logger.error("timer schedule at fixed rate failed ", throwable);
-                }
+        List<Map<String, JSONArray>> result = new ArrayList<>();
+        String modelId = ConversionUtil.toString(ModelParamsConfigurer.getModelingParams().get("modelId"));
+        String querySql = "select src_id,dst_ip_segment from model_result_asset_behavior_relation " +
+                "where modeling_params_id='" + modelId + "';";
+        try {
+            ResultSet resultSet = DbConnectUtil.getConnection().createStatement().executeQuery(querySql);
+            while (resultSet.next()) {
+                Map<String, JSONArray> map = new HashMap<>();
+                String srcId = resultSet.getString("src_id");
+                String segmentStr = resultSet.getString("dst_ip_segment");
+                JSONArray segmentArr = (JSONArray) JSONValue.parse(segmentStr);
+                map.put(srcId, segmentArr);
+                result.add(map);
             }
-        }, firstTime, 1000 * 60 * 5);
-
+        } catch (SQLException sqlException) {
+            logger.error("query build model result failed", sqlException);
+        }
+        lastBuildModelResult = result;
+        return result;
     }
 }
-

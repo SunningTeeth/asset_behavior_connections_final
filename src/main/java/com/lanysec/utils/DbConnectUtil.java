@@ -40,6 +40,8 @@ public class DbConnectUtil {
             dataSource.setJdbcUrl(url);
             dataSource.setUser(username);
             dataSource.setPassword(password);
+            dataSource.setMaxIdleTime(60);
+            dataSource.setIdleConnectionTestPeriod(60);
             logger.info("load dataSource url :" + url + " user :" + username + "/" + password);
         } catch (Exception e) {
             logger.error("get database connection failed due to ", e);
@@ -68,6 +70,10 @@ public class DbConnectUtil {
     public static void execUpdateTask(String sql, String... params) {
         Connection connection = getConnection();
         try {
+            if (connection == null) {
+                logger.error("mysql connection is null.");
+                return;
+            }
             PreparedStatement ps = connection.prepareStatement(sql);
             for (int i = 1; i <= params.length; i++) {
                 ps.setString(i, params[i - 1]);

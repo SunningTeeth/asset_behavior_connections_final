@@ -18,19 +18,17 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.LocalDateTime;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * @author daijb
- * @date 2021/3/5 21:37
+ * @date 2021/3/7 13:49
  */
-public class MySqlSink extends RichSinkFunction<JSONObject> {
+public class MysqlSink2 extends RichSinkFunction<String> {
 
-    private static final Logger logger = LoggerFactory.getLogger(MySqlSink.class);
+    private static final Logger logger = LoggerFactory.getLogger(MysqlSink2.class);
 
     private PreparedStatement ps;
 
@@ -52,51 +50,55 @@ public class MySqlSink extends RichSinkFunction<JSONObject> {
     @Override
     public void open(Configuration parameters) throws Exception {
         super.open(parameters);
-        logger.info("mysql sink connection is opening....");
         connection = DbConnectUtil.getConnection();
         String sql = "insert into `model_result_asset_behavior_relation` (`id`,`modeling_params_id`,`src_id`,`src_ip`,`dst_ip_segment`,`time`)" +
                 " values (?,?,?,?,?,?) ON DUPLICATE KEY UPDATE `dst_ip_segment`=?";
         ps = connection.prepareStatement(sql);
+        logger.info("mysql sink connection is opening....");
     }
 
     @Override
-    public void invoke(JSONObject json, Context context) throws Exception {
+    public void invoke(String jsonStr, Context context) throws Exception {
+
         checkModelInfo();
         checkState();
         if (state != ServiceState.Ready) {
             logger.warn("build modeling is stopped...");
             return;
         }
+        JSONObject json = (JSONObject) JSONValue.parse(jsonStr);
         String key = ConversionUtil.toString(calculateSegmentCurrKey());
         String modelId = ModelParamsConfigurer.getModelingParams().get("modelId").toString();
         String entityId = ConversionUtil.toString(json.get("entityId"));
         String assetIp = ConversionUtil.toString(json.get("assetIp"));
-        String querySql = "select dst_ip_segment from model_result_asset_behavior_relation where modeling_params_id='" + modelId + "' and src_id='" + entityId + "';";
-        PreparedStatement preparedStatement = connection.prepareStatement(querySql);
-        ResultSet resultSet = preparedStatement.executeQuery();
-        String oldSegmentStr = "";
-        while (resultSet.next()) {
-            oldSegmentStr = resultSet.getString("dst_ip_segment");
-        }
+        logger.info("-- : " + json + "\n modelId : " + modelId +
+                "\n entityId : " + entityId + "\n assetIp:" + assetIp + "\n key : " + key);
         JSONArray segmentArr = null;
         String hostIp = json.get("hostIp").toString();
-        if (!StringUtil.isEmpty(oldSegmentStr)) {
-            JSONArray segmentArrTemp = (JSONArray) JSONValue.parse(oldSegmentStr);
-            JSONArray temp = new JSONArray();
-            for (Object obj : segmentArrTemp) {
-                JSONObject item = (JSONObject) JSONValue.parse(obj.toString());
-                Set set = new HashSet();
-                if (item.get(key) != null) {
-                    set.addAll((JSONArray) JSONValue.parse(item.get(key).toString()));
+        List<Map<String, JSONArray>> lastBuildModelResult = ModelParamsConfigurer.getLastBuildModelResult();
+        for (Map<String, JSONArray> v : lastBuildModelResult) {
+            for (Map.Entry<String, JSONArray> entry : v.entrySet()) {
+                if (!StringUtil.equals(entityId, entry.getKey())) {
+                    continue;
                 }
-                set.add(hostIp);
-                JSONArray arr = new JSONArray();
-                arr.addAll(set);
-                item.put(key, arr);
-                temp.add(item);
+                JSONArray segmentArrTemp = entry.getValue();
+                JSONArray temp = new JSONArray();
+                for (Object obj : segmentArrTemp) {
+                    JSONObject item = (JSONObject) JSONValue.parse(obj.toString());
+                    Set set = new HashSet();
+                    if (item.get(key) != null) {
+                        set.addAll((JSONArray) JSONValue.parse(item.get(key).toString()));
+                    }
+                    set.add(hostIp);
+                    JSONArray arr = new JSONArray();
+                    arr.addAll(set);
+                    item.put(key, arr);
+                    temp.add(item);
+                }
+                segmentArr = temp;
             }
-            segmentArr = temp;
-        } else {
+        }
+        if (segmentArr == null || segmentArr.isEmpty()) {
             segmentArr = new JSONArray();
             JSONObject item = new JSONObject();
             JSONArray ips = new JSONArray();
@@ -111,13 +113,14 @@ public class MySqlSink extends RichSinkFunction<JSONObject> {
         ps.setString(5, segmentArr.toJSONString());
         ps.setString(6, LocalDateTime.now().toString());
         ps.setString(7, segmentArr.toJSONString());
-        ps.execute();
+        ps.executeUpdate();
         if (isFirst) {
             isFirst = false;
             updateModelTaskStatus(AssetBehaviorConstants.ModelStatus.SUCCESS);
             //记录运行天数
-            updateModelHistoryDataDays(false);
+            updateModelHistoryDataDays();
         }
+
     }
 
     @Override
@@ -195,27 +198,37 @@ public class MySqlSink extends RichSinkFunction<JSONObject> {
         }
         try {
             String updateSql = "UPDATE `modeling_params` SET `model_task_status`=?, `modify_time`=? WHERE (`id`='" + modelingParams.get(AssetBehaviorConstants.MODEL_ID) + "');";
-            DbConnectUtil.execUpdateTask(updateSql, modelStatus.toString().toLowerCase(), LocalDateTime.now().toString());
+            PreparedStatement ps = connection.prepareStatement(updateSql);
+            ps.setString(1, modelStatus.toString().toLowerCase());
+            ps.setString(2, LocalDateTime.now().toString());
+            ps.execute();
             logger.info("update model task status : " + modelStatus.name());
+        } catch (Throwable t) {
         } finally {
             modelTaskStatusLock.unlock();
         }
     }
 
     /**
-     * @param isUpdate true:插入  false:更新
+     * 更新模型建模数据存储历史天数
      */
-    private void updateModelHistoryDataDays(boolean isUpdate) {
-        String insertSql = "INSERT INTO `config` (`keyword`, `vals`, `opts`, `types`, `name`, `notes`, `gid`, `sys`, `sort`) VALUES " +
-                "('ASSET_BEHAVIOR_CONNECTION', ?, '', 'int', '资产行为连接关系记录存储数据天数', '', '0', '1', '50');";
+    private void updateModelHistoryDataDays() {
+        String sql = "INSERT INTO `config` (`keyword`, `vals`, `opts`, `types`, `name`, `notes`, `gid`, `sys`, `sort`) VALUES " +
+                "('ASSET_BEHAVIOR_CONNECTION', ?, '', 'int', '资产行为连接关系记录存储数据天数', '', '0', '1', '50') " +
+                "ON DUPLICATE KEY UPDATE `vals`=?";
 
-        String updateSql = "UPDATE config SET `vals`=? WHERE keyword='ASSET_BEHAVIOR_CONNECTION';";
         int day = this.historyDataDays;
-        if (isUpdate) {
-            DbConnectUtil.execUpdateTask(updateSql, day + "");
-        } else {
-            DbConnectUtil.execUpdateTask(insertSql, "" + day);
+        try {
+            PreparedStatement preparedStatement = connection.prepareStatement(sql);
+            preparedStatement.setString(1, day + "");
+            preparedStatement.setString(2, day + "");
+            if (preparedStatement.execute()) {
+                logger.info("update model history data days : " + day);
+            }
+        } catch (Throwable throwable) {
+            logger.error("update model history data days : " + day + " failed.", throwable);
         }
+
     }
 
     /**
@@ -268,7 +281,7 @@ public class MySqlSink extends RichSinkFunction<JSONObject> {
         // 建模数据存储历史天数
         boolean modelHistoryDataDaysChange = checkModelHistoryDataDays(newModelingParams);
         if (modelHistoryDataDaysChange) {
-            updateModelHistoryDataDays(true);
+            updateModelHistoryDataDays();
         }
         this.modelingParams = newModelingParams;
     }
@@ -363,5 +376,5 @@ public class MySqlSink extends RichSinkFunction<JSONObject> {
         return false;
     }
 
-}
 
+}

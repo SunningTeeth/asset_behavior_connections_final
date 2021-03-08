@@ -19,14 +19,14 @@ public class FlowSrcMatchAssetEntity {
     private String assetIp;
 
     /**
-     * flow 中srcIp
+     * flow 中dstIp
      */
-    private String srcIp;
+    private String dstIp;
 
     /**
-     * flow中srcId
+     * flow中dstId
      */
-    private String srcId;
+    private String dstId;
 
     public String getEntityId() {
         return entityId;
@@ -44,20 +44,20 @@ public class FlowSrcMatchAssetEntity {
         this.assetIp = assetIp;
     }
 
-    public String getSrcIp() {
-        return srcIp;
+    public String getDstIp() {
+        return dstIp;
     }
 
-    public void setSrcIp(String srcIp) {
-        this.srcIp = srcIp;
+    public void setDstIp(String dstIp) {
+        this.dstIp = dstIp;
     }
 
-    public String getSrcId() {
-        return srcId;
+    public String getDstId() {
+        return dstId;
     }
 
-    public void setSrcId(String srcId) {
-        this.srcId = srcId;
+    public void setDstId(String dstId) {
+        this.dstId = dstId;
     }
 
     @Override
@@ -65,8 +65,8 @@ public class FlowSrcMatchAssetEntity {
         return "FlowSrcMatchAssetEntity{" +
                 "entityId='" + entityId + '\'' +
                 ", assetIp='" + assetIp + '\'' +
-                ", srcIp='" + srcIp + '\'' +
-                ", srcId='" + srcId + '\'' +
+                ", srcIp='" + dstIp + '\'' +
+                ", srcId='" + dstId + '\'' +
                 '}';
     }
 
@@ -74,8 +74,8 @@ public class FlowSrcMatchAssetEntity {
         JSONObject json = new JSONObject();
         json.put("entityId", getEntityId());
         json.put("assetIp", getAssetIp());
-        json.put("hostId", getSrcId());
-        json.put("hostIp", getSrcIp());
+        json.put("hostId", getDstId());
+        json.put("hostIp", getDstIp());
         return json;
     }
 }
