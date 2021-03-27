@@ -1,6 +1,6 @@
 package com.lanysec.utils;
 
-import com.mchange.v2.c3p0.ComboPooledDataSource;
+import org.apache.commons.dbcp2.BasicDataSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -16,49 +16,29 @@ public class DbConnectUtil {
 
     private static final Logger logger = LoggerFactory.getLogger(DbConnectUtil.class);
 
-    /**
-     * 创建连接池对象
-     */
-    private static ComboPooledDataSource dataSource = null;
-
-    static {
-        dataSourceConfigurer();
-    }
-
-    /**
-     * 配置连接池
-     */
-    private static void dataSourceConfigurer() {
-        try {
-            //设置数据源
-            dataSource = new ComboPooledDataSource();
-            dataSource.setDriverClass("com.mysql.jdbc.Driver");
-            String addr = SystemUtil.getHostIp();
-            String username = SystemUtil.getMysqlUser();
-            String password = SystemUtil.getMysqlPassword();
-            String url = "jdbc:mysql://" + addr + ":3306/csp?useEncoding=true&characterEncoding=utf-8&serverTimezone=UTC";
-            dataSource.setJdbcUrl(url);
-            dataSource.setUser(username);
-            dataSource.setPassword(password);
-            dataSource.setMaxIdleTime(60);
-            dataSource.setIdleConnectionTestPeriod(60);
-            logger.info("load dataSource url :" + url + " user :" + username + "/" + password);
-        } catch (Exception e) {
-            logger.error("get database connection failed due to ", e);
-        }
-    }
-
     public static Connection getConnection() {
-        Connection conn = null;
-        if (dataSource == null) {
-            dataSourceConfigurer();
-        }
+        BasicDataSource dataSource = new BasicDataSource();
+        dataSource.setDriverClassName("com.mysql.jdbc.Driver");
+        dataSource.setUrl(SystemUtil.getJdbcUrl());
+        dataSource.setUsername(SystemUtil.getMysqlUser());
+        dataSource.setPassword(SystemUtil.getMysqlPassword());
+
+        //初始化的连接数
+        dataSource.setInitialSize(3);
+        //最大连接数
+        dataSource.setMaxTotal(5);
+        //最大空闲数
+        dataSource.setMaxIdle(2);
+        //最小空闲数
+        dataSource.setMinIdle(1);
+
+        Connection con = null;
         try {
-            conn = dataSource.getConnection();
-        } catch (Throwable throwable) {
-            logger.error("get database connection failed ", throwable);
+            con = dataSource.getConnection();
+        } catch (Exception e) {
+            logger.error("create mysql connect pool failed", e);
         }
-        return conn;
+        return con;
     }
 
     /**

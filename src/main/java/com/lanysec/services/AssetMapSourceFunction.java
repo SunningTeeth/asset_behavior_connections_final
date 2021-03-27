@@ -1,9 +1,7 @@
 package com.lanysec.services;
 
-import com.lanysec.entity.AssetSourceEntity;
 import com.lanysec.utils.ConversionUtil;
 import com.lanysec.utils.DbConnectUtil;
-import com.lanysec.utils.StringUtil;
 import org.apache.flink.api.common.functions.RichMapFunction;
 import org.apache.flink.configuration.Configuration;
 import org.json.simple.JSONObject;
@@ -12,10 +10,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.sql.Connection;
-import java.sql.PreparedStatement;
 import java.sql.ResultSet;
-import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.HashSet;
+import java.util.Set;
 
 /**
  * @author daijb
@@ -25,13 +22,12 @@ public class AssetMapSourceFunction extends RichMapFunction<String, String> {
 
     private static final Logger logger = LoggerFactory.getLogger(AssetMapSourceFunction.class);
 
-    private Connection connection;
-    private Map<String, Map<String, Object>> assets = new ConcurrentHashMap<>();
+    private final Set<String> allAssetIds = new HashSet<>();
 
     @Override
     public void open(Configuration parameters) throws Exception {
         super.open(parameters);
-        connection = DbConnectUtil.getConnection();
+        Connection connection = DbConnectUtil.getConnection();
         String sql = "SELECT entity_id, entity_name, asset_ip, area_id " +
                 "FROM asset a, modeling_params m " +
                 "WHERE m.model_alt_params -> '$.model_entity_group' LIKE CONCAT('%', a.entity_groups,'%') " +
@@ -39,13 +35,7 @@ public class AssetMapSourceFunction extends RichMapFunction<String, String> {
                 "and model_switch=1 and model_switch_2=1;";
         ResultSet resultSet = connection.prepareStatement(sql).executeQuery();
         while (resultSet.next()) {
-            Map<String, Object> map = new HashMap<>();
-            String entityId = ConversionUtil.toString(resultSet.getString("entity_id"));
-            map.put("entityId", entityId);
-            map.put("entityName", resultSet.getString("entity_name"));
-            map.put("assetIp", resultSet.getString("asset_ip"));
-            map.put("areaId", resultSet.getString("area_id"));
-            assets.put(entityId, map);
+            allAssetIds.add(ConversionUtil.toString(resultSet.getString("entity_id")));
         }
     }
 
@@ -55,23 +45,14 @@ public class AssetMapSourceFunction extends RichMapFunction<String, String> {
         JSONObject json = (JSONObject) JSONValue.parse(line);
         String srcId = ConversionUtil.toString(json.get("SrcID"));
         String srcIp = ConversionUtil.toString(json.get("SrcIP"));
-        String dstId = ConversionUtil.toString(json.get("DstID"));
         String dstIp = ConversionUtil.toString(json.get("DstIP"));
         JSONObject result = new JSONObject();
-        for (String entityId : assets.keySet()) {
-            Map<String, Object> map = assets.get(entityId);
-            if (StringUtil.equalsIgnoreCase(entityId, srcId)) {
-                result.put("entityId", entityId);
-                result.put("assetIp", map.get("assetIp"));
-                result.put("hostIp", dstIp);
-                return result.toJSONString();
-            }
-            if (StringUtil.equalsIgnoreCase(entityId, dstId)) {
-                result.put("entityId", entityId);
-                result.put("assetIp", map.get("assetIp"));
-                result.put("hostIp", srcIp);
-                return result.toJSONString();
-            }
+        if (allAssetIds.contains(srcId)) {
+            result.put("entityId", srcId);
+            result.put("assetIp", srcIp);
+            // 资产连接的目标ip
+            result.put("hostIp", dstIp);
+            return result.toJSONString();
         }
         return null;
     }

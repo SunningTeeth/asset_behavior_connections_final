@@ -115,10 +115,10 @@ public class MysqlSink2 extends RichSinkFunction<String> {
             item.put(key, ips);
             segmentArr.add(item);
         }
-        ps.setString(1, "mdl_" + UUIDUtil.genId());
+        ps.setString(1, "msf_" + UUIDUtil.genId());
         ps.setString(2, modelId);
         ps.setString(3, entityId);
-        ps.setString(4, getAssetOfIp(assetIp));
+        ps.setString(4, assetIp);
         ps.setString(5, segmentArr.toJSONString());
         ps.setString(6, LocalDateTime.now().toString());
         ps.setString(7, segmentArr.toJSONString());
@@ -192,13 +192,6 @@ public class MysqlSink2 extends RichSinkFunction<String> {
             }
         }
         return segmentKey;
-    }
-
-    private String getAssetOfIp(String assetIp) {
-        //  {"00:00:00:00:00:00":["192.168.8.97"]}
-        int start = assetIp.indexOf("[") + 2;
-        int end = assetIp.indexOf("]") - 1;
-        return assetIp.substring(start, end);
     }
 
     /**

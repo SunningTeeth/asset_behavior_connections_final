@@ -15,11 +15,11 @@ import org.slf4j.LoggerFactory;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * @author daijb
  * @date 2021/3/7 15:22
+ * 检测
  */
 public class CheckModelMapSourceFunction extends RichMapFunction<String, String> {
 
