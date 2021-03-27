@@ -91,31 +91,10 @@ public class AssetBehaviorRelation implements AssetBehaviorConstants {
 
         // 启动定时任务
         startFunc();
+
         //建模系列操作_new
-        {
-            SingleOutputStreamOperator<String> map = kafkaSourceFilter.map(new AssetMapSourceFunction());
-            map.addSink(new MysqlSink2());
-        }
-
-        // 检测系列操作_new
-        {
-            SingleOutputStreamOperator<String> checkStreamMap = kafkaSourceFilter.map(new CheckModelMapSourceFunction());
-            SingleOutputStreamOperator<String> matchCheckStreamFilter = checkStreamMap.filter((FilterFunction<String>) value -> {
-                if (StringUtil.isEmpty(value)) {
-                    return false;
-                }
-                return true;
-            });
-
-            // 将过滤数据送往kafka  topic
-            String brokers = ConversionUtil.toString(props.get(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG));
-            String checkTopic = ConversionUtil.toString(props.getProperty("check.topic"));
-            matchCheckStreamFilter.addSink(new FlinkKafkaProducer010<>(
-                    brokers,
-                    checkTopic,
-                    new KeyedSerializationSchemaWrapper<>(new SimpleStringSchema())
-            ));
-        }
+        SingleOutputStreamOperator<String> map = kafkaSourceFilter.map(new AssetMapSourceFunction());
+        map.addSink(new MysqlSink2());
 
         try {
             streamExecutionEnvironment.execute("kafka message streaming start ....");
