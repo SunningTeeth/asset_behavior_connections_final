@@ -101,7 +101,8 @@ public class MysqlSink2 extends RichSinkFunction<String> {
                     set.add(hostIp);
                     JSONArray arr = new JSONArray();
                     arr.addAll(set);
-                    item.put(key, arr);
+                    item.put("name", key);
+                    item.put("value", arr);
                     temp.add(item);
                 }
                 segmentArr = temp;
@@ -112,7 +113,8 @@ public class MysqlSink2 extends RichSinkFunction<String> {
             JSONObject item = new JSONObject();
             JSONArray ips = new JSONArray();
             ips.add(hostIp);
-            item.put(key, ips);
+            item.put("name", key);
+            item.put("value", ips);
             segmentArr.add(item);
         }
         ps.setString(1, "msf_" + UUIDUtil.genId());
