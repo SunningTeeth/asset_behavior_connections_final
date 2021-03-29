@@ -80,8 +80,6 @@ public class MysqlSink2 extends RichSinkFunction<String> {
         String modelId = ModelParamsConfigurer.getModelingParams().get("modelId").toString();
         String entityId = ConversionUtil.toString(json.get("entityId"));
         String assetIp = ConversionUtil.toString(json.get("assetIp"));
-        logger.info("-- : " + json + "\n modelId : " + modelId +
-                "\n entityId : " + entityId + "\n assetIp:" + assetIp + "\n key : " + key);
         JSONArray segmentArr = null;
         String hostIp = json.get("hostIp").toString();
         List<Map<String, JSONArray>> lastBuildModelResult = ModelParamsConfigurer.getLastBuildModelResult();
