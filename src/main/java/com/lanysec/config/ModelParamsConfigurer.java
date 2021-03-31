@@ -97,7 +97,7 @@ public class ModelParamsConfigurer implements AssetBehaviorConstants {
     public static Set<String> reloadBuildModelAssetId() throws SQLException {
         String sql = "SELECT entity_id FROM group_members g,modeling_params m " +
                 "WHERE m.model_alt_params -> '$.model_entity_group' LIKE CONCAT('%', g.group_id,'%') " +
-                "and m.model_type=1 and model_child_type=1 " +
+                "and m.model_type=1 and model_child_type=3 " +
                 "and m.model_switch=1 and m.model_switch_2=1";
         Set<String> result = new HashSet<>();
         Connection conn = DbConnectUtil.getConnection();
