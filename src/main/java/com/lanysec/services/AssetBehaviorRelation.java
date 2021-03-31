@@ -126,6 +126,7 @@ public class AssetBehaviorRelation implements AssetBehaviorConstants {
             public void run() {
                 try {
                     ModelParamsConfigurer.reloadModelingParams();
+                    ModelParamsConfigurer.reloadBuildModelAssetId();
                     logger.info("reload model params configurer.");
                 } catch (Throwable throwable) {
                     logger.error("timer schedule at fixed rate failed ", throwable);

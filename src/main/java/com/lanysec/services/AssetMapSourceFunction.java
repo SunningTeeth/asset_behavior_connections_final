@@ -1,17 +1,11 @@
 package com.lanysec.services;
 
+import com.lanysec.config.ModelParamsConfigurer;
 import com.lanysec.utils.ConversionUtil;
-import com.lanysec.utils.DbConnectUtil;
 import org.apache.flink.api.common.functions.RichMapFunction;
-import org.apache.flink.configuration.Configuration;
 import org.json.simple.JSONObject;
 import org.json.simple.JSONValue;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
-import java.sql.Connection;
-import java.sql.ResultSet;
-import java.util.HashSet;
 import java.util.Set;
 
 /**
@@ -19,30 +13,6 @@ import java.util.Set;
  * @date 2021/3/7 12:12
  */
 public class AssetMapSourceFunction extends RichMapFunction<String, String> {
-
-    private static final Logger logger = LoggerFactory.getLogger(AssetMapSourceFunction.class);
-
-    private final Set<String> allAssetIds = new HashSet<>();
-
-    @Override
-    public void open(Configuration parameters) throws Exception {
-        super.open(parameters);
-        Connection connection = DbConnectUtil.getConnection();
-        /*String sql = "SELECT entity_id, entity_name, asset_ip, area_id " +
-                "FROM asset a, modeling_params m " +
-                "WHERE m.model_alt_params -> '$.model_entity_group' LIKE CONCAT('%', a.entity_groups,'%') " +
-                "and m.model_type=1 and model_child_type=3 " +
-                "and model_switch=1 and model_switch_2=1;";*/
-
-        String sql = "SELECT entity_id FROM group_members g,modeling_params m " +
-                "WHERE m.model_alt_params -> '$.model_entity_group' LIKE CONCAT('%', g.group_id,'%') " +
-                "and m.model_type=1 and model_child_type=3 " +
-                "and m.model_switch=1 and m.model_switch_2=1";
-        ResultSet resultSet = connection.prepareStatement(sql).executeQuery();
-        while (resultSet.next()) {
-            allAssetIds.add(ConversionUtil.toString(resultSet.getString("entity_id")));
-        }
-    }
 
     @Override
     public String map(String line) throws Exception {
@@ -52,6 +22,7 @@ public class AssetMapSourceFunction extends RichMapFunction<String, String> {
         String srcIp = ConversionUtil.toString(json.get("SrcIP"));
         String dstIp = ConversionUtil.toString(json.get("DstIP"));
         JSONObject result = new JSONObject();
+        Set<String> allAssetIds = ModelParamsConfigurer.getAllAssetIds();
         if (allAssetIds.contains(srcId)) {
             result.put("entityId", srcId);
             result.put("assetIp", srcIp);

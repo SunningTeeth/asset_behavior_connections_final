@@ -41,9 +41,12 @@ public class ModelParamsConfigurer implements AssetBehaviorConstants {
      * 从数据库获取建模参数
      */
     public static Map<String, Object> reloadModelingParams() {
-        Connection connection = DbConnectUtil.getConnection();
         Map<String, Object> result = new HashMap<>(15 * 3 / 4);
         try {
+            Connection connection = DbConnectUtil.getConnection();
+            if (connection == null) {
+                return result;
+            }
             String sql = "select * from modeling_params" +
                     " where model_type=1 and model_child_type =3" +
                     " and model_switch = 1 and model_switch_2 =1";
@@ -70,8 +73,45 @@ public class ModelParamsConfigurer implements AssetBehaviorConstants {
             logger.error("Get modeling parameters from the database error ", throwable);
         }
         logger.info("Get modeling parameters from the database : " + result.toString());
+        modelingParams = result;
         return result;
     }
+
+    private static volatile Set<String> allAssetIds;
+
+    /**
+     * 返回建模参数
+     *
+     * @return 建模参数k-v
+     */
+    public static Set<String> getAllAssetIds() throws Exception {
+        if (allAssetIds == null) {
+            allAssetIds = reloadBuildModelAssetId();
+        }
+        return allAssetIds;
+    }
+
+    /**
+     * 重新加载建模资产id
+     */
+    public static Set<String> reloadBuildModelAssetId() throws SQLException {
+        String sql = "SELECT entity_id FROM group_members g,modeling_params m " +
+                "WHERE m.model_alt_params -> '$.model_entity_group' LIKE CONCAT('%', g.group_id,'%') " +
+                "and m.model_type=1 and model_child_type=1 " +
+                "and m.model_switch=1 and m.model_switch_2=1";
+        Set<String> result = new HashSet<>();
+        Connection conn = DbConnectUtil.getConnection();
+        if (conn != null) {
+            ResultSet resultSet = conn.prepareStatement(sql).executeQuery();
+            while (resultSet.next()) {
+                String entityId = ConversionUtil.toString(resultSet.getString("entity_id"));
+                result.add(entityId);
+            }
+        }
+        allAssetIds = result;
+        return result;
+    }
+
 
     private static volatile List<Map<String, JSONArray>> lastBuildModelResult = queryLastBuildModelResult();
 
@@ -92,7 +132,11 @@ public class ModelParamsConfigurer implements AssetBehaviorConstants {
         String querySql = "select src_id,dst_ip_segment from model_result_asset_behavior_relation " +
                 "where modeling_params_id='" + modelId + "';";
         try {
-            ResultSet resultSet = DbConnectUtil.getConnection().createStatement().executeQuery(querySql);
+            Connection connection = DbConnectUtil.getConnection();
+            if (connection == null) {
+                return result;
+            }
+            ResultSet resultSet = connection.createStatement().executeQuery(querySql);
             while (resultSet.next()) {
                 Map<String, JSONArray> map = new HashMap<>();
                 String srcId = resultSet.getString("src_id");
