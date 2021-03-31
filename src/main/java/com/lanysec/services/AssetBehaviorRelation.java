@@ -93,7 +93,7 @@ public class AssetBehaviorRelation implements AssetBehaviorConstants {
         startFunc();
 
         //建模系列操作_new
-        SingleOutputStreamOperator<String> map = kafkaSourceFilter.map(new AssetMapSourceFunction());
+        SingleOutputStreamOperator<String> map = kafkaSourceFilter.map(new AssetMapSourceFunction()).filter((FilterFunction<String>) value -> !StringUtil.isEmpty(value));
         map.addSink(new MysqlSink2());
 
         try {
