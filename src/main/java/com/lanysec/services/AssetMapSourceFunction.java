@@ -28,11 +28,16 @@ public class AssetMapSourceFunction extends RichMapFunction<String, String> {
     public void open(Configuration parameters) throws Exception {
         super.open(parameters);
         Connection connection = DbConnectUtil.getConnection();
-        String sql = "SELECT entity_id, entity_name, asset_ip, area_id " +
+        /*String sql = "SELECT entity_id, entity_name, asset_ip, area_id " +
                 "FROM asset a, modeling_params m " +
                 "WHERE m.model_alt_params -> '$.model_entity_group' LIKE CONCAT('%', a.entity_groups,'%') " +
                 "and m.model_type=1 and model_child_type=3 " +
-                "and model_switch=1 and model_switch_2=1;";
+                "and model_switch=1 and model_switch_2=1;";*/
+
+        String sql = "SELECT entity_id FROM group_members g,modeling_params m " +
+                "WHERE m.model_alt_params -> '$.model_entity_group' LIKE CONCAT('%', g.group_id,'%') " +
+                "and m.model_type=1 and model_child_type=3 " +
+                "and m.model_switch=1 and m.model_switch_2=1";
         ResultSet resultSet = connection.prepareStatement(sql).executeQuery();
         while (resultSet.next()) {
             allAssetIds.add(ConversionUtil.toString(resultSet.getString("entity_id")));
